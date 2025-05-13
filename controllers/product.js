@@ -1,0 +1,547 @@
+const { Product, Category, ProductMedia, ProductAttribute } = require('../models');
+const { Op } = require('sequelize');
+const fs = require('fs').promises;
+const path = require('path');
+const slugify = require('slugify');
+
+class ProductController {
+    // GET /products
+    static async index(req, res, next) {
+        try {
+            const {
+                page = 1,
+                limit = 10,
+                search,
+                category_id,
+                status,
+                is_featured,
+                sort_by = 'created_at',
+                sort_order = 'DESC'
+            } = req.query;
+
+            const offset = (page - 1) * limit;
+            const where = {};
+
+            // Search functionality
+            if (search) {
+                where[Op.or] = [
+                    { name: { [Op.like]: `%${search}%` } },
+                    { description: { [Op.like]: `%${search}%` } }
+                ];
+            }
+
+            // Filters
+            if (category_id) where.category_id = category_id;
+            if (status) where.status = status;
+            if (is_featured) where.is_featured = is_featured;
+
+            // Validate sort parameters
+            const allowedSortFields = ['created_at', 'name', 'price', 'status'];
+            const sortField = allowedSortFields.includes(sort_by) ? sort_by : 'created_at';
+            const order = sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+            const { count, rows } = await Product.findAndCountAll({
+                where,
+                limit: parseInt(limit),
+                offset: parseInt(offset),
+                include: [
+                    { model: Category, as: 'category' },
+                    { model: ProductMedia, as: 'media' },
+                    { model: ProductAttribute, as: 'attributes' }
+                ],
+                order: [[sortField, order]]
+            });
+
+            res.status(200).json({
+                success: true,
+                data: rows,
+                pagination: {
+                    total: count,
+                    page: parseInt(page),
+                    pages: Math.ceil(count / limit)
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // GET /products/:id
+    static async show(req, res, next) {
+        try {
+            const { id } = req.params;
+            const product = await Product.findByPk(id, {
+                include: [
+                    { model: Category, as: 'category' },
+                    { model: ProductMedia, as: 'media' },
+                    { model: ProductAttribute, as: 'attributes' }
+                ]
+            });
+
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Product not found'
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                data: product
+            });
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // POST /products
+    static async create(req, res, next) {
+        try {
+            // Parse the JSON data from the form
+            const productData = JSON.parse(req.body.data);
+            const {
+                name,
+                category_id,
+                description,
+                short_description,
+                specifications,
+                features,
+                system_requirements,
+                price,
+                is_featured,
+                status,
+                meta_title,
+                meta_description,
+                meta_keywords,
+                attributes
+            } = productData;
+
+            // Validate required fields
+            if (!name || !category_id) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Name and category_id are required'
+                });
+            }
+
+            // Validate category exists
+            const category = await Category.findByPk(category_id);
+            if (!category) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid category_id'
+                });
+            }
+
+            // Create slug from name
+            const slug = slugify(name, { lower: true });
+
+            // Handle thumbnail upload
+            let thumbnail_url = null;
+            if (req.files && req.files.thumbnail) {
+                const file = req.files.thumbnail[0];
+                thumbnail_url = `/uploads/${file.filename}`;
+            }
+
+            // Create product
+            const product = await Product.create({
+                name,
+                slug,
+                category_id,
+                description,
+                short_description,
+                specifications,
+                features,
+                system_requirements,
+                price,
+                is_featured,
+                status: status || 'draft',
+                meta_title,
+                meta_description,
+                meta_keywords,
+                thumbnail_url
+            });
+
+            // Handle media uploads
+            if (req.files && req.files.media) {
+                const mediaData = req.files.media.map((file, index) => ({
+                    url: `/uploads/${file.filename}`,
+                    product_id: product.id,
+                    sort_order: index
+                }));
+                await ProductMedia.bulkCreate(mediaData);
+            }
+
+            // Handle attributes
+            if (attributes && Array.isArray(attributes)) {
+                const attributeData = attributes.map(attr => ({
+                    ...attr,
+                    product_id: product.id
+                }));
+                await ProductAttribute.bulkCreate(attributeData);
+            }
+
+            // Fetch complete product with relations
+            const fullProduct = await Product.findByPk(product.id, {
+                include: [
+                    { model: Category, as: 'category' },
+                    { model: ProductMedia, as: 'media' },
+                    { model: ProductAttribute, as: 'attributes' }
+                ]
+            });
+
+            res.status(201).json({
+                success: true,
+                data: fullProduct
+            });
+        } catch (err) {
+            console.error(err);
+            // If there's an error, delete any uploaded files
+            if (req.files) {
+                const files = Object.values(req.files).flat();
+                for (const file of files) {
+                    try {
+                        await fs.unlink(file.path);
+                    } catch (unlinkErr) {
+                        console.error('Error deleting file:', unlinkErr);
+                    }
+                }
+            }
+            next(err);
+        }
+    }
+
+    // PUT /products/:id
+    static async update(req, res, next) {
+        try {
+            const { id } = req.params;
+            const productData = JSON.parse(req.body.data);
+            const {
+                name,
+                category_id,
+                description,
+                short_description,
+                specifications,
+                features,
+                system_requirements,
+                price,
+                is_featured,
+                status,
+                meta_title,
+                meta_description,
+                meta_keywords,
+                attributes
+            } = productData;
+
+            const product = await Product.findByPk(id);
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Product not found'
+                });
+            }
+
+            // Validate category if being updated
+            if (category_id) {
+                const category = await Category.findByPk(category_id);
+                if (!category) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Invalid category_id'
+                    });
+                }
+            }
+
+            // Create slug from name if name is being updated
+            const slug = name ? slugify(name, { lower: true }) : undefined;
+
+            // Handle thumbnail upload
+            let thumbnail_url = product.thumbnail_url;
+            if (req.files && req.files.thumbnail) {
+                // Delete old thumbnail if exists
+                if (product.thumbnail_url) {
+                    try {
+                        await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
+                    } catch (err) {
+                        console.error('Error deleting old thumbnail:', err);
+                    }
+                }
+                thumbnail_url = `/uploads/${req.files.thumbnail[0].filename}`;
+            }
+
+            // Update product
+            await product.update({
+                name,
+                slug,
+                category_id,
+                description,
+                short_description,
+                specifications,
+                features,
+                system_requirements,
+                price,
+                is_featured,
+                status,
+                meta_title,
+                meta_description,
+                meta_keywords,
+                thumbnail_url
+            });
+
+            // Handle media uploads
+            if (req.files && req.files.media) {
+                // Delete existing media files
+                const existingMedia = await ProductMedia.findAll({ where: { product_id: id } });
+                for (const media of existingMedia) {
+                    try {
+                        await fs.unlink(path.join(__dirname, '..', media.url));
+                    } catch (err) {
+                        console.error('Error deleting old media:', err);
+                    }
+                }
+                await ProductMedia.destroy({ where: { product_id: id } });
+
+                // Create new media records
+                const mediaData = req.files.media.map((file, index) => ({
+                    url: `/uploads/${file.filename}`,
+                    product_id: id,
+                    sort_order: index
+                }));
+                await ProductMedia.bulkCreate(mediaData);
+            }
+
+            // Handle attributes
+            if (attributes && Array.isArray(attributes)) {
+                // Delete existing attributes
+                await ProductAttribute.destroy({ where: { product_id: id } });
+
+                // Create new attributes
+                const attributeData = attributes.map(attr => ({
+                    ...attr,
+                    product_id: id
+                }));
+                await ProductAttribute.bulkCreate(attributeData);
+            }
+
+            const updatedProduct = await Product.findByPk(id, {
+                include: [
+                    { model: Category, as: 'category' },
+                    { model: ProductMedia, as: 'media' },
+                    { model: ProductAttribute, as: 'attributes' }
+                ]
+            });
+
+            res.status(200).json({
+                success: true,
+                data: updatedProduct
+            });
+        } catch (err) {
+            console.error(err);
+            // If there's an error, delete any uploaded files
+            if (req.files) {
+                const files = Object.values(req.files).flat();
+                for (const file of files) {
+                    try {
+                        await fs.unlink(file.path);
+                    } catch (unlinkErr) {
+                        console.error('Error deleting file:', unlinkErr);
+                    }
+                }
+            }
+            next(err);
+        }
+    }
+
+    // DELETE /products/:id
+    static async delete(req, res, next) {
+        try {
+            const { id } = req.params;
+            const product = await Product.findByPk(id);
+
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Product not found'
+                });
+            }
+
+            // Delete associated media files
+            const media = await ProductMedia.findAll({ where: { product_id: id } });
+            for (const item of media) {
+                try {
+                    await fs.unlink(path.join(__dirname, '..', item.url));
+                } catch (err) {
+                    console.error('Error deleting media file:', err);
+                }
+            }
+
+            // Delete thumbnail if exists
+            if (product.thumbnail_url) {
+                try {
+                    await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
+                } catch (err) {
+                    console.error('Error deleting thumbnail:', err);
+                }
+            }
+
+            // Delete associated media records
+            await ProductMedia.destroy({ where: { product_id: id } });
+
+            // Delete associated attributes
+            await ProductAttribute.destroy({ where: { product_id: id } });
+
+            // Delete product
+            await product.destroy();
+
+            res.status(200).json({
+                success: true,
+                message: 'Product deleted successfully'
+            });
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // GET /products/:id/media
+    static async getMedia(req, res, next) {
+        try {
+            const { id } = req.params;
+            const media = await ProductMedia.findAll({
+                where: { product_id: id },
+                order: [['sort_order', 'ASC']]
+            });
+            res.status(200).json(media);
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // POST /products/:id/media
+    static async addMedia(req, res, next) {
+        try {
+            const { id } = req.params;
+            const product = await Product.findByPk(id);
+            if (!product) return res.status(404).json({ message: 'Product not found' });
+
+            if (!req.files || !req.files.media) {
+                return res.status(400).json({ message: 'No media files uploaded' });
+            }
+
+            // Get current highest sort_order
+            const lastMedia = await ProductMedia.findOne({
+                where: { product_id: id },
+                order: [['sort_order', 'DESC']]
+            });
+            const startOrder = lastMedia ? lastMedia.sort_order + 1 : 0;
+
+            // Create new media records
+            const mediaData = req.files.media.map((file, index) => ({
+                url: `/uploads/${file.filename}`,
+                product_id: id,
+                sort_order: startOrder + index
+            }));
+            const newMedia = await ProductMedia.bulkCreate(mediaData);
+
+            res.status(201).json(newMedia);
+        } catch (err) {
+            console.error(err);
+            // If there's an error, delete any uploaded files
+            if (req.files) {
+                const files = Object.values(req.files).flat();
+                for (const file of files) {
+                    try {
+                        await fs.unlink(file.path);
+                    } catch (unlinkErr) {
+                        console.error('Error deleting file:', unlinkErr);
+                    }
+                }
+            }
+            next(err);
+        }
+    }
+
+    // PUT /products/:id/media/:mediaId
+    static async updateMedia(req, res, next) {
+        try {
+            const { id, mediaId } = req.params;
+            const { sort_order } = req.body;
+
+            const media = await ProductMedia.findOne({
+                where: { id: mediaId, product_id: id }
+            });
+            if (!media) return res.status(404).json({ message: 'Media not found' });
+
+            if (sort_order !== undefined) {
+                await media.update({ sort_order });
+            }
+
+            res.status(200).json(media);
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // DELETE /products/:id/media/:mediaId
+    static async deleteMedia(req, res, next) {
+        try {
+            const { id, mediaId } = req.params;
+            const media = await ProductMedia.findOne({
+                where: { id: mediaId, product_id: id }
+            });
+            if (!media) return res.status(404).json({ message: 'Media not found' });
+
+            // Delete file
+            try {
+                await fs.unlink(path.join(__dirname, '..', media.url));
+            } catch (err) {
+                console.error('Error deleting media file:', err);
+            }
+
+            // Delete record
+            await media.destroy();
+            res.status(200).json({ message: 'Media deleted successfully' });
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // PUT /products/:id/media/reorder
+    static async reorderMedia(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { mediaIds } = req.body; // Array of media IDs in new order
+
+            if (!Array.isArray(mediaIds)) {
+                return res.status(400).json({ message: 'mediaIds must be an array' });
+            }
+
+            // Update sort_order for each media
+            const updates = mediaIds.map((mediaId, index) =>
+                ProductMedia.update(
+                    { sort_order: index },
+                    { where: { id: mediaId, product_id: id } }
+                )
+            );
+            await Promise.all(updates);
+
+            // Get updated media list
+            const media = await ProductMedia.findAll({
+                where: { product_id: id },
+                order: [['sort_order', 'ASC']]
+            });
+
+            res.status(200).json(media);
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+}
+
+module.exports = ProductController;
