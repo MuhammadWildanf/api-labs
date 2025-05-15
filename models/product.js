@@ -11,6 +11,7 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // Product belongs to Category
+      Product.belongsTo(models.User, { foreignKey: "authorId" })
       Product.belongsTo(models.Category, {
         foreignKey: 'category_id',
         as: 'category'
@@ -30,15 +31,16 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Product.init({
+    authorId: {
+      type:
+        DataTypes.INTEGER
+    },
     category_id: DataTypes.INTEGER,
     name: DataTypes.STRING,
     slug: DataTypes.STRING,
     thumbnail_url: DataTypes.STRING,
     description: DataTypes.TEXT,
     short_description: DataTypes.TEXT,
-    specifications: DataTypes.JSON, // For storing technical specifications
-    features: DataTypes.JSON, // For storing product features
-    system_requirements: DataTypes.TEXT, // For software/hardware requirements
     price: DataTypes.DECIMAL(10, 2),
     is_featured: DataTypes.BOOLEAN,
     status: {

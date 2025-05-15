@@ -1,0 +1,26 @@
+[
+  {
+    "username": "wildan",
+    "email": "wildan@gmail.com",
+    "password": "wildan",
+    "role": "admin"
+  },
+  {
+    "username": "ferdi",
+    "email": "ferdi@gmail.com",
+    "password": "ferdi",
+    "role": "admin"
+  },
+  {
+    "username": "wildone",
+    "email": "wildone@gmail.com",
+    "password": "wildone",
+    "role": "admin"
+  },
+  {
+    "username": "imajiwalab",
+    "email": "visual.lab@imajiwa.id",
+    "password": "visualab01",
+    "role": "admin"
+  }
+]

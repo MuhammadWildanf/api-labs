@@ -9,6 +9,15 @@ module.exports = {
                 primaryKey: true,
                 type: Sequelize.INTEGER
             },
+            authorId: {
+                type: Sequelize.INTEGER,
+                references: {
+                    model: 'Users',
+                    key: 'id'
+                },
+                onUpdate: 'cascade',
+                onDelete: 'cascade'
+            },
             category_id: {
                 type: Sequelize.INTEGER,
                 references: {
@@ -36,15 +45,6 @@ module.exports = {
             short_description: {
                 type: Sequelize.TEXT
             },
-            specifications: {
-                type: Sequelize.JSON
-              },
-              features: {
-                type: Sequelize.JSON
-              },
-              system_requirements: {
-                type: Sequelize.TEXT
-              },
             price: {
                 type: Sequelize.DECIMAL(10, 2)
             },
