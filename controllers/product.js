@@ -1,4 +1,4 @@
-const { Product, Category, ProductMedia, ProductAttribute } = require('../models');
+const { Product, Category, User, ProductMedia } = require('../models');
 const { Op } = require('sequelize');
 const fs = require('fs').promises;
 const path = require('path');
@@ -45,9 +45,9 @@ class ProductController {
                 limit: parseInt(limit),
                 offset: parseInt(offset),
                 include: [
+                    { model: User },
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
-                    { model: ProductAttribute, as: 'attributes' }
                 ],
                 order: [[sortField, order]]
             });
@@ -75,7 +75,6 @@ class ProductController {
                 include: [
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
-                    { model: ProductAttribute, as: 'attributes' }
                 ]
             });
 
@@ -105,14 +104,14 @@ class ProductController {
                 name,
                 category_id,
                 description,
-                short_description,
+                specifications,
+                requirements,
                 price,
                 is_featured,
                 status,
                 meta_title,
                 meta_description,
                 meta_keywords,
-                attributes
             } = productData;
 
             // Validate required fields
@@ -148,7 +147,8 @@ class ProductController {
                 slug,
                 category_id,
                 description,
-                short_description,
+                specifications,
+                requirements,
                 price,
                 is_featured,
                 status: status || 'draft',
@@ -168,21 +168,13 @@ class ProductController {
                 await ProductMedia.bulkCreate(mediaData);
             }
 
-            // Handle attributes
-            if (attributes && Array.isArray(attributes)) {
-                const attributeData = attributes.map(attr => ({
-                    ...attr,
-                    product_id: product.id
-                }));
-                await ProductAttribute.bulkCreate(attributeData);
-            }
+
 
             // Fetch complete product with relations
             const fullProduct = await Product.findByPk(product.id, {
                 include: [
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
-                    { model: ProductAttribute, as: 'attributes' }
                 ]
             });
 
@@ -216,14 +208,14 @@ class ProductController {
                 name,
                 category_id,
                 description,
-                short_description,
+                specifications,
+                requirements,
                 price,
                 is_featured,
                 status,
                 meta_title,
                 meta_description,
                 meta_keywords,
-                attributes
             } = productData;
 
             const product = await Product.findByPk(id);
@@ -268,7 +260,8 @@ class ProductController {
                 slug,
                 category_id,
                 description,
-                short_description,
+                specifications,
+                requirements,
                 price,
                 is_featured,
                 status,
@@ -300,24 +293,12 @@ class ProductController {
                 await ProductMedia.bulkCreate(mediaData);
             }
 
-            // Handle attributes
-            if (attributes && Array.isArray(attributes)) {
-                // Delete existing attributes
-                await ProductAttribute.destroy({ where: { product_id: id } });
 
-                // Create new attributes
-                const attributeData = attributes.map(attr => ({
-                    ...attr,
-                    product_id: id
-                }));
-                await ProductAttribute.bulkCreate(attributeData);
-            }
 
             const updatedProduct = await Product.findByPk(id, {
                 include: [
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
-                    { model: ProductAttribute, as: 'attributes' }
                 ]
             });
 
@@ -377,8 +358,6 @@ class ProductController {
             // Delete associated media records
             await ProductMedia.destroy({ where: { product_id: id } });
 
-            // Delete associated attributes
-            await ProductAttribute.destroy({ where: { product_id: id } });
 
             // Delete product
             await product.destroy();

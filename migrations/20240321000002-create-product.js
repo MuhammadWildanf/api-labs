@@ -9,7 +9,7 @@ module.exports = {
                 primaryKey: true,
                 type: Sequelize.INTEGER
             },
-            authorId: {
+            author_id: {
                 type: Sequelize.INTEGER,
                 references: {
                     model: 'Users',
@@ -42,8 +42,11 @@ module.exports = {
             description: {
                 type: Sequelize.TEXT
             },
-            short_description: {
-                type: Sequelize.TEXT
+            specifications: {
+                type: Sequelize.JSON
+            },
+            requirements: {
+                type: Sequelize.JSON
             },
             price: {
                 type: Sequelize.DECIMAL(10, 2)

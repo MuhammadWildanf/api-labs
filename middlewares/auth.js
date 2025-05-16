@@ -4,10 +4,24 @@ const { User, Product, Category } = require("../models/index")
 
 const authentication = async (req, res, next) => {
     try {
-        const { access_token } = req.headers
-        const payload = verifyToken(access_token)
+        let token;
+
+        // Check for access_token header
+        if (req.headers.access_token) {
+            token = req.headers.access_token;
+        }
+        // Check for Authorization Bearer token
+        else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+            token = req.headers.authorization.split(' ')[1];
+        }
+
+        if (!token) {
+            throw { name: "Unauthorized", message: "jwt must be provided" }
+        }
+
+        const payload = verifyToken(token)
         const user = await User.findByPk(payload.id)
-        if (!user) throw { name: "Unauthorized", msg: "Invalid token" }
+        if (!user) throw { name: "Unauthorized", message: "Invalid token" }
         req.user = {
             id: user.id, email: user.email, role: user.role
         }

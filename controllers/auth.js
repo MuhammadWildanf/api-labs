@@ -6,24 +6,6 @@ const { OAuth2Client } = require('google-auth-library')
 
 class Auth {
 
-    static async register(req, res, next) {
-        console.log(req.body);
-        const { username, email, password, phoneNumber, address } = req.body
-        try {
-
-            let user = await User.create({ username, email, password, phoneNumber, address })
-            // res.json(user)
-            res.status(201).json({
-                user: {
-                    id: user.id,
-                    email: user.email
-                }
-            })
-        } catch (error) {
-            next(error)
-        }
-    }
-
     static async login(req, res, next) {
         try {
             const { email, password } = req.body

@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       // Product belongs to Category
-      Product.belongsTo(models.User, { foreignKey: "authorId" })
+      Product.belongsTo(models.User, { foreignKey: "author_id" })
       Product.belongsTo(models.Category, {
         foreignKey: 'category_id',
         as: 'category'
@@ -22,16 +22,10 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'product_id',
         as: 'media'
       });
-
-      // Product has many ProductAttributes
-      Product.hasMany(models.ProductAttribute, {
-        foreignKey: 'product_id',
-        as: 'attributes'
-      });
     }
   }
   Product.init({
-    authorId: {
+    author_id: {
       type:
         DataTypes.INTEGER
     },
@@ -40,7 +34,8 @@ module.exports = (sequelize, DataTypes) => {
     slug: DataTypes.STRING,
     thumbnail_url: DataTypes.STRING,
     description: DataTypes.TEXT,
-    short_description: DataTypes.TEXT,
+    specifications: DataTypes.JSON,
+    requirements: DataTypes.JSON,
     price: DataTypes.DECIMAL(10, 2),
     is_featured: DataTypes.BOOLEAN,
     status: {
