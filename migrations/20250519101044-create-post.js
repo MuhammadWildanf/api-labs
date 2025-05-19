@@ -55,7 +55,7 @@ module.exports = {
       },
       category_id: {
         type: Sequelize.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: 'post_categories',
           key: 'id'
@@ -78,6 +78,5 @@ module.exports = {
 
   async down(queryInterface, Sequelize) {
     await queryInterface.dropTable('posts');
-    await queryInterface.sequelize.query('DROP TYPE IF EXISTS "enum_posts_status";'); // Bersihkan enum
   }
 };
