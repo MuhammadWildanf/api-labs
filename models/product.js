@@ -36,7 +36,7 @@ module.exports = (sequelize, DataTypes) => {
     description: DataTypes.TEXT,
     specifications: DataTypes.JSON,
     requirements: DataTypes.JSON,
-    price: DataTypes.DECIMAL(10, 2),
+    price: DataTypes.DECIMAL(15, 2),
     is_featured: DataTypes.BOOLEAN,
     status: {
       type: DataTypes.ENUM('draft', 'published', 'archived'),

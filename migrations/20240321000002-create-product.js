@@ -49,7 +49,7 @@ module.exports = {
                 type: Sequelize.JSON
             },
             price: {
-                type: Sequelize.DECIMAL(10, 2)
+                type: Sequelize.DECIMAL(15, 2)
             },
             is_featured: {
                 type: Sequelize.BOOLEAN,
