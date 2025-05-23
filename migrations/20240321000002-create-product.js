@@ -43,10 +43,14 @@ module.exports = {
                 type: Sequelize.TEXT
             },
             specifications: {
-                type: Sequelize.JSON
+                type: Sequelize.JSON,
+                allowNull: true,
+                defaultValue: {}
             },
             requirements: {
-                type: Sequelize.JSON
+                type: Sequelize.JSON,
+                allowNull: true,
+                defaultValue: {}
             },
             price: {
                 type: Sequelize.DECIMAL(15, 2)

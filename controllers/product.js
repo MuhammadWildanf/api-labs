@@ -114,24 +114,39 @@ class ProductController {
                 meta_keywords,
             } = productData;
 
-            // Validate required fields
+            // Validasi data
             if (!name || !category_id) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Name and category_id are required'
+                    message: 'Name dan category_id wajib diisi'
                 });
             }
 
-            // Validate category exists
+            // Validasi format specifications dan requirements
+            if (specifications && typeof specifications !== 'object') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Format specifications tidak valid'
+                });
+            }
+
+            if (requirements && typeof requirements !== 'object') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Format requirements tidak valid'
+                });
+            }
+
+            // Validasi category
             const category = await Category.findByPk(category_id);
             if (!category) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Invalid category_id'
+                    message: 'Category tidak ditemukan'
                 });
             }
 
-            // Create slug from name
+            // Buat slug dari nama
             const slug = slugify(name, { lower: true });
 
             // Handle thumbnail upload
@@ -141,14 +156,14 @@ class ProductController {
                 thumbnail_url = `/uploads/${file.filename}`;
             }
 
-            // Create product
+            // Buat product dengan data yang sudah divalidasi
             const product = await Product.create({
                 name,
                 slug,
                 category_id,
                 description,
-                specifications,
-                requirements,
+                specifications: specifications || {},
+                requirements: requirements || {},
                 price,
                 is_featured,
                 status: status || 'draft',
@@ -169,9 +184,7 @@ class ProductController {
                 await ProductMedia.bulkCreate(mediaData);
             }
 
-
-
-            // Fetch complete product with relations
+            // Ambil data lengkap product dengan relasi
             const fullProduct = await Product.findByPk(product.id, {
                 include: [
                     { model: Category, as: 'category' },
@@ -184,8 +197,8 @@ class ProductController {
                 data: fullProduct
             });
         } catch (err) {
-            console.error(err);
-            // If there's an error, delete any uploaded files
+            console.error('Error creating product:', err);
+            // Hapus file yang sudah diupload jika terjadi error
             if (req.files) {
                 const files = Object.values(req.files).flat();
                 for (const file of files) {
@@ -219,32 +232,48 @@ class ProductController {
                 meta_keywords,
             } = productData;
 
+            // Cari product yang akan diupdate
             const product = await Product.findByPk(id);
             if (!product) {
                 return res.status(404).json({
                     success: false,
-                    message: 'Product not found'
+                    message: 'Product tidak ditemukan'
                 });
             }
 
-            // Validate category if being updated
+            // Validasi format specifications dan requirements
+            if (specifications && typeof specifications !== 'object') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Format specifications tidak valid'
+                });
+            }
+
+            if (requirements && typeof requirements !== 'object') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Format requirements tidak valid'
+                });
+            }
+
+            // Validasi category jika diupdate
             if (category_id) {
                 const category = await Category.findByPk(category_id);
                 if (!category) {
                     return res.status(400).json({
                         success: false,
-                        message: 'Invalid category_id'
+                        message: 'Category tidak ditemukan'
                     });
                 }
             }
 
-            // Create slug from name if name is being updated
+            // Buat slug dari nama jika nama diupdate
             const slug = name ? slugify(name, { lower: true }) : undefined;
 
             // Handle thumbnail upload
             let thumbnail_url = product.thumbnail_url;
             if (req.files && req.files.thumbnail) {
-                // Delete old thumbnail if exists
+                // Hapus thumbnail lama jika ada
                 if (product.thumbnail_url) {
                     try {
                         await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
@@ -255,14 +284,14 @@ class ProductController {
                 thumbnail_url = `/uploads/${req.files.thumbnail[0].filename}`;
             }
 
-            // Update product
+            // Update product dengan data yang sudah divalidasi
             await product.update({
                 name,
                 slug,
                 category_id,
                 description,
-                specifications,
-                requirements,
+                specifications: specifications || product.specifications,
+                requirements: requirements || product.requirements,
                 price,
                 is_featured,
                 status,
@@ -274,7 +303,7 @@ class ProductController {
 
             // Handle media uploads
             if (req.files && req.files.media) {
-                // Delete existing media files
+                // Hapus media yang ada
                 const existingMedia = await ProductMedia.findAll({ where: { product_id: id } });
                 for (const media of existingMedia) {
                     try {
@@ -285,7 +314,7 @@ class ProductController {
                 }
                 await ProductMedia.destroy({ where: { product_id: id } });
 
-                // Create new media records
+                // Buat record media baru
                 const mediaData = req.files.media.map((file, index) => ({
                     url: `/uploads/${file.filename}`,
                     product_id: id,
@@ -294,8 +323,7 @@ class ProductController {
                 await ProductMedia.bulkCreate(mediaData);
             }
 
-
-
+            // Ambil data product yang sudah diupdate
             const updatedProduct = await Product.findByPk(id, {
                 include: [
                     { model: Category, as: 'category' },
@@ -308,8 +336,8 @@ class ProductController {
                 data: updatedProduct
             });
         } catch (err) {
-            console.error(err);
-            // If there's an error, delete any uploaded files
+            console.error('Error updating product:', err);
+            // Hapus file yang sudah diupload jika terjadi error
             if (req.files) {
                 const files = Object.values(req.files).flat();
                 for (const file of files) {
