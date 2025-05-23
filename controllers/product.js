@@ -290,8 +290,8 @@ class ProductController {
                 slug,
                 category_id,
                 description,
-                specifications: specifications || product.specifications,
-                requirements: requirements || product.requirements,
+                specifications, // Langsung gunakan object, biarkan model yang handle JSON conversion
+                requirements, // Langsung gunakan object, biarkan model yang handle JSON conversion
                 price,
                 is_featured,
                 status,
