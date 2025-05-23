@@ -155,7 +155,8 @@ class ProductController {
                 meta_title,
                 meta_description,
                 meta_keywords,
-                thumbnail_url
+                thumbnail_url,
+                author_id: req.user.id
             });
 
             // Handle media uploads
