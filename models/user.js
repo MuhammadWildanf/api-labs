@@ -23,6 +23,12 @@ module.exports = (sequelize, DataTypes) => {
         notEmpty: { msg: 'Please enter your username' }
       }
     },
+    firstname: {
+      type: DataTypes.STRING,
+    },
+    lastname: {
+      type: DataTypes.STRING,
+    },
     email: {
       type: DataTypes.STRING,
       allowNull: false,

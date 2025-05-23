@@ -5,8 +5,9 @@ const categoryRouter = require('./category');
 const postcategoryRouter = require('./post-category');
 const productRouter = require('./product');
 const postRouter = require('./post');
-const { authorization, authentication, authorizationStatus } = require("../middlewares/auth")
+const { authentication } = require("../middlewares/auth")
 const public = require('./public')
+const upload = require('../middlewares/upload');
 
 const router = express.Router()
 
@@ -19,6 +20,8 @@ router.post("/login/google", auth.google)
 router.use('/api/category', categoryRouter);
 router.use('/api/post-category', postcategoryRouter);
 router.use(authentication)
+router.put('/api/profile', auth.editProfile)
+router.put('/api/profile', upload.single('profile'), auth.editProfileWithImage);
 router.use('/api/products', productRouter);
 router.use('/api/posts', postRouter);
 

@@ -20,10 +20,10 @@ class Auth {
             }
 
             let access_token = createToken({ id: user.id })
-            res.status(200).json({ id: user.id, username: user.username, email: user.email, role: user.role, access_token })
+            res.status(200).json({ id: user.id, username: user.username, firstname: user.firstname, lastname: user.lastname, profile: user.profile, email: user.email, role: user.role, access_token })
         } catch (error) {
             console.log(error);
-            next(error)
+            next(error.message)
         }
     }
 
@@ -50,11 +50,86 @@ class Auth {
 
             const access_token = createToken({ id: user.id, email: user.email, role: user.role })
 
-            res.status(200).json({ id: user.id, username: user.username, email: user.email, role: user.role, access_token })
+            res.status(200).json({ id: user.id, username: user.username, firstname: user.firstname, lastname: user.lastname, profile: user.profile, email: user.email, role: user.role, access_token })
         } catch (err) {
             next(err)
         }
     }
+
+    static async editProfile(req, res, next) {
+        try {
+            const userId = req.user.id; // ini didapat dari middleware authentication
+            const { username, firstname, lastname, email, password } = req.body;
+
+            const user = await User.findByPk(userId);
+
+            if (!user) {
+                throw { name: "NotFound", message: "User not found" };
+            }
+
+            // Update hanya field yang diisi
+            if (username) user.username = username;
+            if (firstname) user.firstname = firstname;
+            if (lastname) user.lastname = lastname;
+            if (email) user.email = email;
+            if (password) user.password = hash(password); // pastikan hash password baru
+
+            await user.save();
+
+            res.status(200).json({
+                message: "Profile updated successfully",
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    firstname: user.firstname,
+                    lastname: user.lastname,
+                    email: user.email,
+                    role: user.role,
+                }
+            });
+        } catch (err) {
+            console.log(error);
+            next(error);
+        }
+    }
+
+    static async editProfileWithImage(req, res, next) {
+        try {
+            const userId = req.user.id;
+            const { username, firstname, lastname, email, password } = req.body;
+            const file = req.file;
+
+            const user = await User.findByPk(userId);
+            if (!user) {
+                throw { name: "NotFound", message: "User not found" };
+            }
+
+            if (username) user.username = username;
+            if (firstname) user.firstname = firstname;
+            if (lastname) user.lastname = lastname;
+            if (email) user.email = email;
+            if (password) user.password = hash(password);
+            if (file) user.profile = file.path; // path ke file yang diupload
+
+            await user.save();
+
+            res.status(200).json({
+                message: "Profile updated with image",
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    firstname: user.firstname,
+                    lastname: user.lastname,
+                    email: user.email,
+                    profile: user.profile,
+                    role: user.role
+                }
+            });
+        } catch (err) {
+            next(err);
+        }
+    }
+
 }
 
 module.exports = Auth

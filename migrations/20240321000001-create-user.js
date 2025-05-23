@@ -12,6 +12,12 @@ module.exports = {
       username: {
         type: Sequelize.STRING
       },
+      firstname: {
+        type: Sequelize.STRING
+      },
+      lastname: {
+        type: Sequelize.STRING
+      },
       email: {
         type: Sequelize.STRING
       },
@@ -19,6 +25,9 @@ module.exports = {
         type: Sequelize.STRING
       },
       role: {
+        type: Sequelize.STRING
+      },
+      profile: {
         type: Sequelize.STRING
       },
       createdAt: {
