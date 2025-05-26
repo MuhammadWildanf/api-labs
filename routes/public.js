@@ -4,6 +4,7 @@ const public = express.Router();
 
 public.get("/products", Public.product);
 public.get("/products/:id", Public.productDetail);
+public.get("/products/:slug", Public.showBySlug);
 public.get("/posts", Public.post);
 public.get("/posts/:id", Public.postDetail);
 

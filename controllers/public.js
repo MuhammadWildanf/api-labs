@@ -34,6 +34,35 @@ class Public {
         }
     }
 
+    static async showBySlug(req, res, next) {
+        try {
+            const { slug } = req.params;
+
+            const product = await Product.findOne({
+                where: { slug },
+                include: [
+                    { model: Category, as: 'category' },
+                    { model: ProductMedia, as: 'media' },
+                ]
+            });
+
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Product not found'
+                });
+            }
+
+            res.status(200).json({
+                success: true,
+                data: product
+            });
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
     static async post(req, res, next) {
         try {
             const posts = await Post.findAll({
