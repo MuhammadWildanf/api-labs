@@ -41,6 +41,7 @@ class Public {
             const product = await Product.findOne({
                 where: { slug },
                 include: [
+                    { model: User },
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
                 ]
