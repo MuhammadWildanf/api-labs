@@ -123,7 +123,6 @@ class ProductController {
         }
     }
 
-
     // POST /products
     static async create(req, res, next) {
         try {
@@ -390,42 +389,41 @@ class ProductController {
             if (!product) {
                 return res.status(404).json({
                     success: false,
-                    message: 'Product not found'
+                    message: 'Product tidak ditemukan'
                 });
             }
 
-            // Delete associated media files
-            const media = await ProductMedia.findAll({ where: { product_id: id } });
-            for (const item of media) {
-                try {
-                    await fs.unlink(path.join(__dirname, '..', item.url));
-                } catch (err) {
-                    console.error('Error deleting media file:', err);
-                }
-            }
-
-            // Delete thumbnail if exists
+            // Hapus thumbnail
             if (product.thumbnail_url) {
                 try {
                     await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
                 } catch (err) {
-                    console.error('Error deleting thumbnail:', err);
+                    console.error('Gagal hapus thumbnail:', err);
                 }
             }
 
-            // Delete associated media records
+            // Hapus semua media
+            const mediaFiles = await ProductMedia.findAll({ where: { product_id: id } });
+            for (const media of mediaFiles) {
+                try {
+                    await fs.unlink(path.join(__dirname, '..', media.url));
+                } catch (err) {
+                    console.error('Gagal hapus media:', err);
+                }
+            }
+
+            // Hapus media di DB
             await ProductMedia.destroy({ where: { product_id: id } });
 
-
-            // Delete product
+            // Hapus product
             await product.destroy();
 
-            res.status(200).json({
+            return res.status(200).json({
                 success: true,
-                message: 'Product deleted successfully'
+                message: 'Product berhasil dihapus'
             });
         } catch (err) {
-            console.error(err);
+            console.error('Error deleting product:', err);
             next(err);
         }
     }

@@ -38,25 +38,11 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.JSON,
       allowNull: true,
       defaultValue: {},
-      get() {
-        const rawValue = this.getDataValue('specifications');
-        return rawValue ? JSON.parse(JSON.stringify(rawValue)) : {};
-      },
-      set(value) {
-        this.setDataValue('specifications', value ? JSON.stringify(value) : '{}');
-      }
     },
     requirements: {
       type: DataTypes.JSON,
       allowNull: true,
       defaultValue: {},
-      get() {
-        const rawValue = this.getDataValue('requirements');
-        return rawValue ? JSON.parse(JSON.stringify(rawValue)) : {};
-      },
-      set(value) {
-        this.setDataValue('requirements', value ? JSON.stringify(value) : '{}');
-      }
     },
     price: DataTypes.DECIMAL(15, 2),
     is_featured: DataTypes.BOOLEAN,
