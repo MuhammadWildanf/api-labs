@@ -26,57 +26,89 @@ const storage = multer.diskStorage({
     }
 });
 
-// Perbolehkan file image dan video
-const fileFilter = (req, file, cb) => {
-    console.log('File filter checking:', {
+// Filter untuk gambar
+const imageFilter = (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only image files are allowed!'), false);
+    }
+};
+
+// Filter untuk video
+const videoFilter = (req, file, cb) => {
+    const allowedVideoTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+    if (allowedVideoTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error('Only video files are allowed!'), false);
+    }
+};
+
+// Filter untuk gambar dan video
+const mediaFilter = (req, file, cb) => {
+    console.log('Media filter checking:', {
         fieldname: file.fieldname,
         originalname: file.originalname,
         mimetype: file.mimetype,
-        size: file.size
+        size: file.size,
+        buffer: file.buffer ? 'Buffer exists' : 'No buffer',
+        encoding: file.encoding
     });
 
-    // Daftar MIME types yang diizinkan
-    const allowedMimeTypes = {
+    const allowedTypes = {
         'image/jpeg': true,
         'image/png': true,
         'image/gif': true,
         'video/mp4': true,
-        'video/quicktime': true, // untuk .mov
-        'video/x-msvideo': true, // untuk .avi
+        'video/quicktime': true,
+        'video/x-msvideo': true,
         'video/webm': true
     };
 
-    // Daftar ekstensi yang diizinkan
-    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.webm'];
-
-    const ext = path.extname(file.originalname).toLowerCase();
-    const mime = file.mimetype;
-
-    console.log('File details:', {
-        extension: ext,
-        mimetype: mime,
-        isAllowedMimeType: allowedMimeTypes[mime],
-        isAllowedExtension: allowedExtensions.includes(ext)
+    console.log('Checking MIME type:', {
+        receivedMimeType: file.mimetype,
+        isAllowed: allowedTypes[file.mimetype] ? 'Yes' : 'No',
+        allowedTypes: Object.keys(allowedTypes)
     });
 
-    if (allowedMimeTypes[mime] && allowedExtensions.includes(ext)) {
-        console.log('File accepted:', file.originalname);
+    if (allowedTypes[file.mimetype]) {
+        console.log('File accepted:', {
+            filename: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size
+        });
         cb(null, true);
     } else {
         console.log('File rejected:', {
             filename: file.originalname,
-            extension: ext,
-            mimetype: mime,
-            reason: !allowedMimeTypes[mime] ? 'MIME type not allowed' : 'Extension not allowed'
+            mimetype: file.mimetype,
+            size: file.size,
+            reason: 'MIME type not allowed'
         });
         cb(new Error('Format file tidak diizinkan. Hanya gambar dan video.'), false);
     }
 };
 
-const upload = multer({
+// Konfigurasi upload untuk gambar
+const uploadImage = multer({
     storage,
-    fileFilter,
-    limits: { fileSize: 100 * 1024 * 1024 } // Maks 100MB
+    fileFilter: imageFilter,
+    limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
+// Konfigurasi upload untuk video
+const uploadVideo = multer({
+    storage,
+    fileFilter: videoFilter,
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+});
+
+// Konfigurasi upload untuk media (gambar dan video)
+const uploadMedia = multer({
+    storage,
+    fileFilter: mediaFilter,
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB
 });
 
 // Error handling middleware
@@ -109,4 +141,9 @@ const handleMulterError = (err, req, res, next) => {
     next(err);
 };
 
-module.exports = { upload, handleMulterError };
+module.exports = {
+    uploadImage,
+    uploadVideo,
+    uploadMedia,
+    handleMulterError
+};

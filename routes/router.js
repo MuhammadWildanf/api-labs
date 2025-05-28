@@ -7,7 +7,7 @@ const productRouter = require('./product');
 const postRouter = require('./post');
 const { authentication } = require("../middlewares/auth")
 const public = require('./public')
-const { upload, handleMulterError } = require('../config/multer');
+const { uploadImage, handleMulterError } = require('../config/multer');
 
 const router = express.Router()
 
@@ -21,7 +21,7 @@ router.use('/api/category', categoryRouter);
 router.use('/api/post-category', postcategoryRouter);
 router.use(authentication)
 router.put('/api/profile', auth.editProfile)
-router.put('/api/profile', upload.single('profile'), handleMulterError, auth.editProfileWithImage);
+router.put('/api/profile', uploadImage.single('profile'), handleMulterError, auth.editProfileWithImage);
 router.use('/api/products', productRouter);
 router.use('/api/posts', postRouter);
 
