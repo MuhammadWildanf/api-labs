@@ -35,18 +35,31 @@ const fileFilter = (req, file, cb) => {
         size: file.size
     });
 
-    const allowedTypes = /jpeg|jpg|png|gif|mp4|avi|mov|webm/;
+    // Daftar MIME types yang diizinkan
+    const allowedMimeTypes = {
+        'image/jpeg': true,
+        'image/png': true,
+        'image/gif': true,
+        'video/mp4': true,
+        'video/quicktime': true, // untuk .mov
+        'video/x-msvideo': true, // untuk .avi
+        'video/webm': true
+    };
+
+    // Daftar ekstensi yang diizinkan
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mov', '.avi', '.webm'];
+
     const ext = path.extname(file.originalname).toLowerCase();
     const mime = file.mimetype;
 
     console.log('File details:', {
         extension: ext,
         mimetype: mime,
-        isAllowedExtension: allowedTypes.test(ext),
-        isImageOrVideo: mime.startsWith('image/') || mime.startsWith('video/')
+        isAllowedMimeType: allowedMimeTypes[mime],
+        isAllowedExtension: allowedExtensions.includes(ext)
     });
 
-    if (allowedTypes.test(ext) && (mime.startsWith('image/') || mime.startsWith('video/'))) {
+    if (allowedMimeTypes[mime] && allowedExtensions.includes(ext)) {
         console.log('File accepted:', file.originalname);
         cb(null, true);
     } else {
@@ -54,7 +67,7 @@ const fileFilter = (req, file, cb) => {
             filename: file.originalname,
             extension: ext,
             mimetype: mime,
-            reason: !allowedTypes.test(ext) ? 'Extension not allowed' : 'Mimetype not allowed'
+            reason: !allowedMimeTypes[mime] ? 'MIME type not allowed' : 'Extension not allowed'
         });
         cb(new Error('Format file tidak diizinkan. Hanya gambar dan video.'), false);
     }
