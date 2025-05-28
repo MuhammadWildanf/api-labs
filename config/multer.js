@@ -11,17 +11,25 @@ if (!fs.existsSync(uploadDir)) {
 // Tentukan penyimpanan file
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
+        console.log('Multer storage destination called for file:', {
+            fieldname: file.fieldname,
+            originalname: file.originalname,
+            mimetype: file.mimetype
+        });
         cb(null, uploadDir);
     },
     filename: function (req, file, cb) {
         const ext = path.extname(file.originalname);
-        cb(null, `${Date.now()}-${file.fieldname}${ext}`);
+        const filename = `${Date.now()}-${file.fieldname}${ext}`;
+        console.log('Generated filename:', filename);
+        cb(null, filename);
     }
 });
 
 // Perbolehkan file image dan video
 const fileFilter = (req, file, cb) => {
-    console.log('Attempting to upload file:', {
+    console.log('File filter checking:', {
+        fieldname: file.fieldname,
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size
@@ -31,6 +39,13 @@ const fileFilter = (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
     const mime = file.mimetype;
 
+    console.log('File details:', {
+        extension: ext,
+        mimetype: mime,
+        isAllowedExtension: allowedTypes.test(ext),
+        isImageOrVideo: mime.startsWith('image/') || mime.startsWith('video/')
+    });
+
     if (allowedTypes.test(ext) && (mime.startsWith('image/') || mime.startsWith('video/'))) {
         console.log('File accepted:', file.originalname);
         cb(null, true);
@@ -38,7 +53,8 @@ const fileFilter = (req, file, cb) => {
         console.log('File rejected:', {
             filename: file.originalname,
             extension: ext,
-            mimetype: mime
+            mimetype: mime,
+            reason: !allowedTypes.test(ext) ? 'Extension not allowed' : 'Mimetype not allowed'
         });
         cb(new Error('Format file tidak diizinkan. Hanya gambar dan video.'), false);
     }
@@ -52,6 +68,13 @@ const upload = multer({
 
 // Error handling middleware
 const handleMulterError = (err, req, res, next) => {
+    console.error('Multer error occurred:', {
+        error: err,
+        message: err.message,
+        code: err.code,
+        field: err.field
+    });
+
     if (err instanceof multer.MulterError) {
         if (err.code === 'LIMIT_FILE_SIZE') {
             return res.status(400).json({
