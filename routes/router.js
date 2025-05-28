@@ -20,8 +20,6 @@ router.post("/login/google", auth.google)
 router.use('/api/category', categoryRouter);
 router.use('/api/post-category', postcategoryRouter);
 router.use(authentication)
-router.put('/api/profile', auth.editProfile)
-router.put('/api/profile', uploadImage.single('profile'), handleMulterError, auth.editProfileWithImage);
 router.use('/api/products', productRouter);
 router.use('/api/posts', postRouter);
 
