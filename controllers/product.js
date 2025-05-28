@@ -1,10 +1,50 @@
-const { Product, Category, User, ProductMedia } = require('../models');
+const { Product, Category, User, ProductMedia, ProductEmbed } = require('../models');
 const { Op } = require('sequelize');
 const fs = require('fs').promises;
 const path = require('path');
 const slugify = require('slugify');
 
 class ProductController {
+    // Helper function to convert video URL to embed format
+    static convertToEmbedUrl(url) {
+        if (!url) return url;
+
+        // Remove any trailing spaces
+        url = url.trim();
+
+        // YouTube video
+        if (url.includes('youtube.com/watch')) {
+            const videoId = url.match(/[?&]v=([^&]+)/)?.[1];
+            if (videoId) {
+                return `https://www.youtube.com/embed/${videoId}`;
+            }
+        }
+        // YouTube short URL
+        else if (url.includes('youtu.be/')) {
+            const videoId = url.split('youtu.be/')[1];
+            if (videoId) {
+                return `https://www.youtube.com/embed/${videoId}`;
+            }
+        }
+
+        else if (url.includes('youtube.com/shorts/')) {
+            const videoId = url.split('youtube.com/shorts/')[1].split('?')[0];
+            if (videoId) {
+                return `https://www.youtube.com/embed/${videoId}`;
+            }
+        }
+        // Vimeo video
+        else if (url.includes('vimeo.com/')) {
+            const videoId = url.split('vimeo.com/')[1];
+            if (videoId) {
+                return `https://player.vimeo.com/video/${videoId}`;
+            }
+        }
+
+        // If already in embed format or unrecognized format, return as is
+        return url;
+    }
+
     // GET /products
     static async index(req, res, next) {
         try {
@@ -48,6 +88,7 @@ class ProductController {
                     { model: User },
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
+                    { model: ProductEmbed, as: 'embeds' },
                 ],
                 order: [[sortField, order]]
             });
@@ -75,6 +116,7 @@ class ProductController {
                 include: [
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
+                    { model: ProductEmbed, as: 'embeds' }
                 ]
             });
 
@@ -103,6 +145,7 @@ class ProductController {
                 include: [
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
+                    { model: ProductEmbed, as: 'embeds' }
                 ]
             });
 
@@ -140,6 +183,7 @@ class ProductController {
                 meta_title,
                 meta_description,
                 meta_keywords,
+                embeds = []
             } = productData;
 
             // Validasi data
@@ -212,11 +256,22 @@ class ProductController {
                 await ProductMedia.bulkCreate(mediaData);
             }
 
+            // Handle embeds
+            if (embeds && embeds.length > 0) {
+                const embedData = embeds.map((embed, index) => ({
+                    embed_url: ProductController.convertToEmbedUrl(embed),
+                    product_id: product.id,
+                    sort_order: index
+                }));
+                await ProductEmbed.bulkCreate(embedData);
+            }
+
             // Ambil data lengkap product dengan relasi
             const fullProduct = await Product.findByPk(product.id, {
                 include: [
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
+                    { model: ProductEmbed, as: 'embeds' }
                 ]
             });
 
@@ -258,6 +313,7 @@ class ProductController {
                 meta_title,
                 meta_description,
                 meta_keywords,
+                embeds = []
             } = productData;
 
             // Cari product yang akan diupdate
@@ -318,8 +374,8 @@ class ProductController {
                 slug,
                 category_id,
                 description,
-                specifications, // Langsung gunakan object, biarkan model yang handle JSON conversion
-                requirements, // Langsung gunakan object, biarkan model yang handle JSON conversion
+                specifications,
+                requirements,
                 price,
                 is_featured,
                 status,
@@ -351,11 +407,28 @@ class ProductController {
                 await ProductMedia.bulkCreate(mediaData);
             }
 
+            // Handle embeds
+            if (embeds) {
+                // Delete existing embeds
+                await ProductEmbed.destroy({ where: { product_id: id } });
+
+                // Create new embeds
+                if (embeds.length > 0) {
+                    const embedData = embeds.map((embed, index) => ({
+                        embed_url: ProductController.convertToEmbedUrl(embed),
+                        product_id: id,
+                        sort_order: index
+                    }));
+                    await ProductEmbed.bulkCreate(embedData);
+                }
+            }
+
             // Ambil data product yang sudah diupdate
             const updatedProduct = await Product.findByPk(id, {
                 include: [
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
+                    { model: ProductEmbed, as: 'embeds' }
                 ]
             });
 
@@ -560,6 +633,134 @@ class ProductController {
             });
 
             res.status(200).json(media);
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // GET /products/:id/embeds
+    static async getEmbeds(req, res, next) {
+        try {
+            const { id } = req.params;
+            const embeds = await ProductEmbed.findAll({
+                where: { product_id: id },
+                order: [['sort_order', 'ASC']]
+            });
+            res.status(200).json(embeds);
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // POST /products/:id/embeds
+    static async addEmbed(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { embed_url } = req.body;
+
+            if (!embed_url) {
+                return res.status(400).json({ message: 'Embed URL is required' });
+            }
+
+            const product = await Product.findByPk(id);
+            if (!product) {
+                return res.status(404).json({ message: 'Product not found' });
+            }
+
+            // Get current highest sort_order
+            const lastEmbed = await ProductEmbed.findOne({
+                where: { product_id: id },
+                order: [['sort_order', 'DESC']]
+            });
+            const sort_order = lastEmbed ? lastEmbed.sort_order + 1 : 0;
+
+            // Create new embed with converted URL
+            const embed = await ProductEmbed.create({
+                embed_url: ProductController.convertToEmbedUrl(embed_url),
+                product_id: id,
+                sort_order
+            });
+
+            res.status(201).json(embed);
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // PUT /products/:id/embeds/:embedId
+    static async updateEmbed(req, res, next) {
+        try {
+            const { id, embedId } = req.params;
+            const { embed_url, sort_order } = req.body;
+
+            const embed = await ProductEmbed.findOne({
+                where: { id: embedId, product_id: id }
+            });
+            if (!embed) {
+                return res.status(404).json({ message: 'Embed not found' });
+            }
+
+            const updateData = {};
+            if (embed_url) updateData.embed_url = ProductController.convertToEmbedUrl(embed_url);
+            if (sort_order !== undefined) updateData.sort_order = sort_order;
+
+            await embed.update(updateData);
+
+            res.status(200).json(embed);
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // DELETE /products/:id/embeds/:embedId
+    static async deleteEmbed(req, res, next) {
+        try {
+            const { id, embedId } = req.params;
+            const embed = await ProductEmbed.findOne({
+                where: { id: embedId, product_id: id }
+            });
+            if (!embed) {
+                return res.status(404).json({ message: 'Embed not found' });
+            }
+
+            await embed.destroy();
+            res.status(200).json({ message: 'Embed deleted successfully' });
+        } catch (err) {
+            console.error(err);
+            next(err);
+        }
+    }
+
+    // PUT /products/:id/embeds/reorder
+    static async reorderEmbeds(req, res, next) {
+        try {
+            const { id } = req.params;
+            const { embedIds } = req.body; // Array of embed IDs in new order
+
+            if (!Array.isArray(embedIds)) {
+                return res.status(400).json({ message: 'embedIds must be an array' });
+            }
+
+            // Update sort_order for each embed
+            const updates = embedIds.map((embedId, index) =>
+                ProductEmbed.update(
+                    { sort_order: index },
+                    { where: { id: embedId, product_id: id } }
+                )
+            );
+            await Promise.all(updates);
+
+            // Get updated embed list
+            const embeds = await ProductEmbed.findAll({
+                where: { product_id: id },
+                order: [['sort_order', 'ASC']]
+            });
+
+            res.status(200).json(embeds);
         } catch (err) {
             console.error(err);
             next(err);

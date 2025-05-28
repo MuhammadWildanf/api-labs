@@ -7,7 +7,6 @@ const productRouter = require('./product');
 const postRouter = require('./post');
 const { authentication } = require("../middlewares/auth")
 const public = require('./public')
-const { uploadImage, handleMulterError } = require('../config/multer');
 
 const router = express.Router()
 
