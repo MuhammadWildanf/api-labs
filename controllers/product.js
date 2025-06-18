@@ -3,6 +3,8 @@ const { Op } = require('sequelize');
 const fs = require('fs').promises;
 const path = require('path');
 const slugify = require('slugify');
+const gcpStorage = require('../config/gcp-storage');
+const { extractGcpPath, isGcpUrl } = require('../helpers/gcp-utils');
 
 class ProductController {
     // Helper function to convert video URL to embed format
@@ -170,6 +172,8 @@ class ProductController {
     static async create(req, res, next) {
         try {
             // Parse the JSON data from the form
+            console.log('Raw request body:', req.body);
+            console.log('Received productData:', JSON.parse(req.body.data));
             const productData = JSON.parse(req.body.data);
             const {
                 name,
@@ -185,6 +189,8 @@ class ProductController {
                 meta_keywords,
                 embeds = []
             } = productData;
+
+            console.log('Embeds data received:', embeds);
 
             // Validasi data
             if (!name || !category_id) {
@@ -225,7 +231,16 @@ class ProductController {
             let thumbnail_url = null;
             if (req.files && req.files.thumbnail) {
                 const file = req.files.thumbnail[0];
-                thumbnail_url = `/uploads/${file.filename}`;
+
+                if (gcpStorage.isConfigured()) {
+                    // Upload ke GCP Storage
+                    const destinationPath = gcpStorage.generateFileName(file.originalname, 'thumbnails');
+                    const uploadResult = await gcpStorage.uploadFile(file, destinationPath);
+                    thumbnail_url = uploadResult.url;
+                } else {
+                    // Fallback ke local storage
+                    thumbnail_url = `/uploads/${file.filename}`;
+                }
             }
 
             // Buat product dengan data yang sudah divalidasi
@@ -248,22 +263,55 @@ class ProductController {
 
             // Handle media uploads
             if (req.files && req.files.media) {
-                const mediaData = req.files.media.map((file, index) => ({
-                    url: `/uploads/${file.filename}`,
-                    product_id: product.id,
-                    sort_order: index
-                }));
+                const mediaData = [];
+
+                for (let i = 0; i < req.files.media.length; i++) {
+                    const file = req.files.media[i];
+                    let mediaUrl;
+
+                    if (gcpStorage.isConfigured()) {
+                        // Upload ke GCP Storage
+                        const destinationPath = gcpStorage.generateFileName(file.originalname, 'media');
+                        const uploadResult = await gcpStorage.uploadFile(file, destinationPath);
+                        mediaUrl = uploadResult.url;
+                    } else {
+                        // Fallback ke local storage
+                        mediaUrl = `/uploads/${file.filename}`;
+                    }
+
+                    mediaData.push({
+                        url: mediaUrl,
+                        product_id: product.id,
+                        sort_order: i
+                    });
+                }
+
                 await ProductMedia.bulkCreate(mediaData);
             }
 
             // Handle embeds
             if (embeds && embeds.length > 0) {
-                const embedData = embeds.map((embed, index) => ({
-                    embed_url: ProductController.convertToEmbedUrl(embed),
-                    product_id: product.id,
-                    sort_order: index
-                }));
-                await ProductEmbed.bulkCreate(embedData);
+                console.log('Processing embeds...');
+                const embedData = embeds.map((embed, index) => {
+                    const convertedUrl = ProductController.convertToEmbedUrl(embed);
+                    console.log(`Converting embed ${index}:`, {
+                        original: embed,
+                        converted: convertedUrl
+                    });
+                    return {
+                        embed_url: convertedUrl,
+                        product_id: product.id,
+                        sort_order: index
+                    };
+                });
+                console.log('Final embed data to be saved:', embedData);
+                try {
+                    const createdEmbeds = await ProductEmbed.bulkCreate(embedData);
+                    console.log('Successfully created embeds:', createdEmbeds);
+                } catch (embedError) {
+                    console.error('Error creating embeds:', embedError);
+                    throw embedError;
+                }
             }
 
             // Ambil data lengkap product dengan relasi
@@ -286,7 +334,14 @@ class ProductController {
                 const files = Object.values(req.files).flat();
                 for (const file of files) {
                     try {
-                        await fs.unlink(file.path);
+                        if (gcpStorage.isConfigured()) {
+                            // Delete from GCP if configured
+                            const destinationPath = gcpStorage.generateFileName(file.originalname, 'temp');
+                            await gcpStorage.deleteFile(destinationPath);
+                        } else {
+                            // Delete local file
+                            await fs.unlink(file.path);
+                        }
                     } catch (unlinkErr) {
                         console.error('Error deleting file:', unlinkErr);
                     }
@@ -300,7 +355,23 @@ class ProductController {
     static async update(req, res, next) {
         try {
             const { id } = req.params;
-            const productData = JSON.parse(req.body.data);
+            console.log('=== UPDATE PRODUCT DEBUG ===');
+            console.log('Raw request body:', req.body);
+            console.log('Request body type:', typeof req.body);
+            console.log('Request body keys:', Object.keys(req.body));
+
+            let productData;
+            try {
+                console.log('Raw data before parse:', req.body.data);
+                productData = JSON.parse(req.body.data);
+                console.log('Successfully parsed productData');
+            } catch (parseError) {
+                console.error('Error parsing productData:', parseError);
+                console.log('Raw data that failed to parse:', req.body.data);
+                throw parseError;
+            }
+
+            console.log('Parsed productData:', JSON.stringify(productData, null, 2));
             const {
                 name,
                 category_id,
@@ -315,6 +386,11 @@ class ProductController {
                 meta_keywords,
                 embeds = []
             } = productData;
+
+            console.log('Embeds data received for update:', embeds);
+            console.log('Embeds type:', typeof embeds);
+            console.log('Is embeds array?', Array.isArray(embeds));
+            console.log('Embeds length:', embeds.length);
 
             // Cari product yang akan diupdate
             const product = await Product.findByPk(id);
@@ -360,12 +436,31 @@ class ProductController {
                 // Hapus thumbnail lama jika ada
                 if (product.thumbnail_url) {
                     try {
-                        await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
+                        if (gcpStorage.isConfigured() && isGcpUrl(product.thumbnail_url)) {
+                            // Extract path from GCP URL
+                            const gcpPath = extractGcpPath(product.thumbnail_url);
+                            if (gcpPath) {
+                                await gcpStorage.deleteFile(gcpPath);
+                            }
+                        } else {
+                            // Delete local file
+                            await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
+                        }
                     } catch (err) {
                         console.error('Error deleting old thumbnail:', err);
                     }
                 }
-                thumbnail_url = `/uploads/${req.files.thumbnail[0].filename}`;
+
+                const file = req.files.thumbnail[0];
+                if (gcpStorage.isConfigured()) {
+                    // Upload ke GCP Storage
+                    const destinationPath = gcpStorage.generateFileName(file.originalname, 'thumbnails');
+                    const uploadResult = await gcpStorage.uploadFile(file, destinationPath);
+                    thumbnail_url = uploadResult.url;
+                } else {
+                    // Fallback ke local storage
+                    thumbnail_url = `/uploads/${file.filename}`;
+                }
             }
 
             // Update product dengan data yang sudah divalidasi
@@ -391,7 +486,16 @@ class ProductController {
                 const existingMedia = await ProductMedia.findAll({ where: { product_id: id } });
                 for (const media of existingMedia) {
                     try {
-                        await fs.unlink(path.join(__dirname, '..', media.url));
+                        if (gcpStorage.isConfigured() && isGcpUrl(media.url)) {
+                            // Extract path from GCP URL
+                            const gcpPath = extractGcpPath(media.url);
+                            if (gcpPath) {
+                                await gcpStorage.deleteFile(gcpPath);
+                            }
+                        } else {
+                            // Delete local file
+                            await fs.unlink(path.join(__dirname, '..', media.url));
+                        }
                     } catch (err) {
                         console.error('Error deleting old media:', err);
                     }
@@ -399,28 +503,64 @@ class ProductController {
                 await ProductMedia.destroy({ where: { product_id: id } });
 
                 // Buat record media baru
-                const mediaData = req.files.media.map((file, index) => ({
-                    url: `/uploads/${file.filename}`,
-                    product_id: id,
-                    sort_order: index
-                }));
+                const mediaData = [];
+                for (let i = 0; i < req.files.media.length; i++) {
+                    const file = req.files.media[i];
+                    let mediaUrl;
+
+                    if (gcpStorage.isConfigured()) {
+                        // Upload ke GCP Storage
+                        const destinationPath = gcpStorage.generateFileName(file.originalname, 'media');
+                        const uploadResult = await gcpStorage.uploadFile(file, destinationPath);
+                        mediaUrl = uploadResult.url;
+                    } else {
+                        // Fallback ke local storage
+                        mediaUrl = `/uploads/${file.filename}`;
+                    }
+
+                    mediaData.push({
+                        url: mediaUrl,
+                        product_id: id,
+                        sort_order: i
+                    });
+                }
                 await ProductMedia.bulkCreate(mediaData);
             }
 
             // Handle embeds
             if (embeds) {
-                // Delete existing embeds
-                await ProductEmbed.destroy({ where: { product_id: id } });
+                console.log('Processing embeds for update...');
+                try {
+                    // Delete existing embeds
+                    const deleteResult = await ProductEmbed.destroy({ where: { product_id: id } });
+                    console.log('Deleted existing embeds:', deleteResult);
 
-                // Create new embeds
-                if (embeds.length > 0) {
-                    const embedData = embeds.map((embed, index) => ({
-                        embed_url: ProductController.convertToEmbedUrl(embed),
-                        product_id: id,
-                        sort_order: index
-                    }));
-                    await ProductEmbed.bulkCreate(embedData);
+                    // Create new embeds
+                    if (embeds.length > 0) {
+                        const embedData = embeds.map((embed, index) => {
+                            const convertedUrl = ProductController.convertToEmbedUrl(embed);
+                            console.log(`Converting embed ${index} for update:`, {
+                                original: embed,
+                                converted: convertedUrl
+                            });
+                            return {
+                                embed_url: convertedUrl,
+                                product_id: id,
+                                sort_order: index
+                            };
+                        });
+                        console.log('Final embed data to be saved in update:', embedData);
+                        const createdEmbeds = await ProductEmbed.bulkCreate(embedData);
+                        console.log('Successfully created embeds in update:', createdEmbeds);
+                    } else {
+                        console.log('No embeds to create, embeds array is empty');
+                    }
+                } catch (embedError) {
+                    console.error('Error handling embeds:', embedError);
+                    throw embedError;
                 }
+            } else {
+                console.log('No embeds data provided in request');
             }
 
             // Ambil data product yang sudah diupdate
@@ -431,6 +571,8 @@ class ProductController {
                     { model: ProductEmbed, as: 'embeds' }
                 ]
             });
+
+            console.log('Final updated product:', JSON.stringify(updatedProduct, null, 2));
 
             res.status(200).json({
                 success: true,
@@ -469,7 +611,16 @@ class ProductController {
             // Hapus thumbnail
             if (product.thumbnail_url) {
                 try {
-                    await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
+                    if (gcpStorage.isConfigured() && isGcpUrl(product.thumbnail_url)) {
+                        // Extract path from GCP URL
+                        const gcpPath = extractGcpPath(product.thumbnail_url);
+                        if (gcpPath) {
+                            await gcpStorage.deleteFile(gcpPath);
+                        }
+                    } else {
+                        // Delete local file
+                        await fs.unlink(path.join(__dirname, '..', product.thumbnail_url));
+                    }
                 } catch (err) {
                     console.error('Gagal hapus thumbnail:', err);
                 }
@@ -479,7 +630,16 @@ class ProductController {
             const mediaFiles = await ProductMedia.findAll({ where: { product_id: id } });
             for (const media of mediaFiles) {
                 try {
-                    await fs.unlink(path.join(__dirname, '..', media.url));
+                    if (gcpStorage.isConfigured() && isGcpUrl(media.url)) {
+                        // Extract path from GCP URL
+                        const gcpPath = extractGcpPath(media.url);
+                        if (gcpPath) {
+                            await gcpStorage.deleteFile(gcpPath);
+                        }
+                    } else {
+                        // Delete local file
+                        await fs.unlink(path.join(__dirname, '..', media.url));
+                    }
                 } catch (err) {
                     console.error('Gagal hapus media:', err);
                 }
@@ -535,11 +695,28 @@ class ProductController {
             const startOrder = lastMedia ? lastMedia.sort_order + 1 : 0;
 
             // Create new media records
-            const mediaData = req.files.media.map((file, index) => ({
-                url: `/uploads/${file.filename}`,
-                product_id: id,
-                sort_order: startOrder + index
-            }));
+            const mediaData = [];
+            for (let i = 0; i < req.files.media.length; i++) {
+                const file = req.files.media[i];
+                let mediaUrl;
+
+                if (gcpStorage.isConfigured()) {
+                    // Upload ke GCP Storage
+                    const destinationPath = gcpStorage.generateFileName(file.originalname, 'media');
+                    const uploadResult = await gcpStorage.uploadFile(file, destinationPath);
+                    mediaUrl = uploadResult.url;
+                } else {
+                    // Fallback ke local storage
+                    mediaUrl = `/uploads/${file.filename}`;
+                }
+
+                mediaData.push({
+                    url: mediaUrl,
+                    product_id: id,
+                    sort_order: startOrder + i
+                });
+            }
+
             const newMedia = await ProductMedia.bulkCreate(mediaData);
 
             res.status(201).json(newMedia);
@@ -550,7 +727,14 @@ class ProductController {
                 const files = Object.values(req.files).flat();
                 for (const file of files) {
                     try {
-                        await fs.unlink(file.path);
+                        if (gcpStorage.isConfigured()) {
+                            // Delete from GCP if configured
+                            const destinationPath = gcpStorage.generateFileName(file.originalname, 'temp');
+                            await gcpStorage.deleteFile(destinationPath);
+                        } else {
+                            // Delete local file
+                            await fs.unlink(file.path);
+                        }
                     } catch (unlinkErr) {
                         console.error('Error deleting file:', unlinkErr);
                     }
@@ -593,7 +777,16 @@ class ProductController {
 
             // Delete file
             try {
-                await fs.unlink(path.join(__dirname, '..', media.url));
+                if (gcpStorage.isConfigured() && isGcpUrl(media.url)) {
+                    // Extract path from GCP URL
+                    const gcpPath = extractGcpPath(media.url);
+                    if (gcpPath) {
+                        await gcpStorage.deleteFile(gcpPath);
+                    }
+                } else {
+                    // Delete local file
+                    await fs.unlink(path.join(__dirname, '..', media.url));
+                }
             } catch (err) {
                 console.error('Error deleting media file:', err);
             }

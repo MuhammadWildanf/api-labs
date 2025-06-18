@@ -1,8 +1,9 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const gcpStorage = require('./gcp-storage');
 
-// Pastikan folder uploads ada
+// Pastikan folder uploads ada (fallback untuk local storage)
 const uploadDir = 'uploads';
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
