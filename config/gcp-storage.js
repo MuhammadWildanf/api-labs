@@ -60,7 +60,7 @@ class GCPStorage {
                 stream.on('finish', async () => {
                     try {
                         // Set file to be publicly readable
-                        await fileUpload.makePublic();
+                        // await fileUpload.makePublic();
 
                         // Get public URL
                         const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${destinationPath}`;
