@@ -1,4 +1,4 @@
-const { Product, Category, User, ProductMedia, ProductEmbed } = require('../models');
+const { Product, Category, SubCategory, User, ProductMedia, ProductEmbed } = require('../models');
 const { Op } = require('sequelize');
 const fs = require('fs').promises;
 const path = require('path');
@@ -89,6 +89,7 @@ class ProductController {
                 include: [
                     { model: User },
                     { model: Category, as: 'category' },
+                    { model: SubCategory, as: 'subcategory' },
                     { model: ProductMedia, as: 'media' },
                     { model: ProductEmbed, as: 'embeds' },
                 ],
@@ -117,6 +118,7 @@ class ProductController {
             const product = await Product.findByPk(id, {
                 include: [
                     { model: Category, as: 'category' },
+                    { model: SubCategory, as: 'subcategory' },
                     { model: ProductMedia, as: 'media' },
                     { model: ProductEmbed, as: 'embeds' }
                 ]
@@ -146,6 +148,7 @@ class ProductController {
                 where: { slug },
                 include: [
                     { model: Category, as: 'category' },
+                    { model: SubCategory, as: 'subcategory' },
                     { model: ProductMedia, as: 'media' },
                     { model: ProductEmbed, as: 'embeds' }
                 ]
@@ -178,6 +181,7 @@ class ProductController {
             const {
                 name,
                 category_id,
+                subcategory_id,
                 description,
                 specifications,
                 requirements,
@@ -224,6 +228,17 @@ class ProductController {
                 });
             }
 
+            // Validasi subcategory
+            if (subcategory_id) {
+                const subcategory = await SubCategory.findByPk(subcategory_id);
+                if (!subcategory) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'SubCategory tidak ditemukan'
+                    });
+                }
+            }
+
             // Buat slug dari nama
             const slug = slugify(name, { lower: true });
 
@@ -248,6 +263,7 @@ class ProductController {
                 name,
                 slug,
                 category_id,
+                subcategory_id,
                 description,
                 specifications: specifications || {},
                 requirements: requirements || {},
@@ -318,6 +334,7 @@ class ProductController {
             const fullProduct = await Product.findByPk(product.id, {
                 include: [
                     { model: Category, as: 'category' },
+                    { model: SubCategory, as: 'subcategory' },
                     { model: ProductMedia, as: 'media' },
                     { model: ProductEmbed, as: 'embeds' }
                 ]
@@ -375,6 +392,7 @@ class ProductController {
             const {
                 name,
                 category_id,
+                subcategory_id,
                 description,
                 specifications,
                 requirements,
@@ -427,6 +445,17 @@ class ProductController {
                 }
             }
 
+            // Validasi subcategory jika diupdate
+            if (subcategory_id) {
+                const subcategory = await SubCategory.findByPk(subcategory_id);
+                if (!subcategory) {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'SubCategory tidak ditemukan'
+                    });
+                }
+            }
+
             // Buat slug dari nama jika nama diupdate
             const slug = name ? slugify(name, { lower: true }) : undefined;
 
@@ -468,6 +497,7 @@ class ProductController {
                 name,
                 slug,
                 category_id,
+                subcategory_id,
                 description,
                 specifications,
                 requirements,
@@ -567,6 +597,7 @@ class ProductController {
             const updatedProduct = await Product.findByPk(id, {
                 include: [
                     { model: Category, as: 'category' },
+                    { model: SubCategory, as: 'subcategory' },
                     { model: ProductMedia, as: 'media' },
                     { model: ProductEmbed, as: 'embeds' }
                 ]

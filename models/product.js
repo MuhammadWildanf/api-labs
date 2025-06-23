@@ -17,6 +17,12 @@ module.exports = (sequelize, DataTypes) => {
         as: 'category'
       });
 
+      // Product belongs to SubCategory
+      Product.belongsTo(models.SubCategory, {
+        foreignKey: 'subcategory_id',
+        as: 'subcategory'
+      });
+
       // Product has many ProductMedia
       Product.hasMany(models.ProductMedia, {
         foreignKey: 'product_id',
@@ -35,6 +41,7 @@ module.exports = (sequelize, DataTypes) => {
         DataTypes.INTEGER
     },
     category_id: DataTypes.INTEGER,
+    subcategory_id: DataTypes.INTEGER,
     name: DataTypes.STRING,
     slug: DataTypes.STRING,
     thumbnail_url: DataTypes.STRING,

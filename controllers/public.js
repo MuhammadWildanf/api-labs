@@ -1,4 +1,4 @@
-const { Product, Category, User, ProductMedia, Post, PostCategory } = require('../models');
+const { Product, SubCategory, Category, User, ProductMedia, Post, PostCategory } = require('../models');
 const { Op } = require("sequelize");
 
 class Public {
@@ -7,6 +7,7 @@ class Public {
             const products = await Product.findAll({
                 include: [
                     { model: User },
+                    { model: SubCategory, as: 'subcategory' },
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
                 ]
@@ -23,6 +24,7 @@ class Public {
             const product = await Product.findByPk(id, {
                 include: [
                     { model: User },
+                    { model: SubCategory, as: 'subcategory' },
                     { model: Category, as: 'category' },
                     { model: ProductMedia, as: 'media' },
                 ]

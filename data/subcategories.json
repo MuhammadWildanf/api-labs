@@ -1,0 +1,44 @@
+[
+  {
+    "name": "Immersive Installations",
+    "slug": "immersive-installations",
+    "description": "Immersive Installations",
+    "category_id": 2
+  },
+  {
+    "name": "Interactive Experiences",
+    "slug": "interactive-experiences",
+    "description": "Interactive Experiences",
+    "category_id": 1
+  },
+  {
+    "name": "Extended Reality(AR/VR/XR)",
+    "slug": "extended-reality",
+    "description": "Extended Reality(AR/VR/XR)",
+    "category_id": 2
+  },
+  {
+    "name": "Virtual Production",
+    "slug": "virtual-production",
+    "description": "Virtual Production",
+    "category_id": 2
+  },
+  {
+    "name": "Artificial Intelligence & Generative Systems",
+    "slug": "artificial-intelligence-generative-systems",
+    "description": "Artificial Intelligence & Generative Systems",
+    "category_id": 3
+  },
+  {
+    "name": "Custom Software & Hardware Development",
+    "slug": "custom-software-hardware-development",
+    "description": "Custom Software & Hardware Development",
+    "category_id": 3
+  },
+  {
+    "name": "Motion Capture & Real-Time Visualization",
+    "slug": "motion-capture-real-time-visualization",
+    "description": "Motion Capture & Real-Time Visualization",
+    "category_id": 3
+  }
+]
